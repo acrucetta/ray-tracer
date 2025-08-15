@@ -4,30 +4,66 @@ import (
 	"fmt"
 	"os"
 	"ray-tracer/internals/color"
+	"ray-tracer/internals/ray"
+	"ray-tracer/internals/vec3"
 )
 
-func main() {
-	var aspect_ratio = 16.0 / 9.0
-	var image_width int = 400
+func rayColor(r ray.Ray) color.Color {
+	unitDirection := r.Direction.Normalize()
+	a := 0.5*unitDirection.Y + 1.0
+	return color.Color{
+		X: (1.0-a)*1.0 + a*0.5,
+		Y: (1.0-a)*1.0 + a*0.7,
+		Z: (1.0-a)*1.0 + a*1.0,
+	}
+}
 
-	var image_height int = int(image_width / int(aspect_ratio))
-	if image_height < 1 {
-		image_height = 1
+func main() {
+
+	// Image
+	aspectRatio := 16.0 / 9.0
+	imageWidth := 400
+
+	imageHeight := int(float64(imageWidth) / aspectRatio)
+	if imageHeight < 1 {
+		imageHeight = 1
 	}
 
 	// Camera
+	focalLength := 1.0
+	viewportHeight := 2.0
+	viewportWidth := viewportHeight * (float64(imageWidth) / float64(imageHeight))
+	cameraCenter := vec3.Vec3{X: 0, Y: 0, Z: 0}
+
 	// Calculating vectors
+	viewportU := vec3.Vec3{X: viewportWidth, Y: 0, Z: 0}
+	viewportV := vec3.Vec3{X: 0, Y: -viewportHeight, Z: 0}
 
-	fmt.Printf("P3\n%v %v \n255\n", image_width, image_height)
+	// Deltas from pixel to pixel
+	pixelDeltaU := viewportU.Div(float64(imageWidth))
+	pixelDeltaV := viewportV.Div(float64(imageHeight))
 
-	for i := range image_height {
-		fmt.Fprintf(os.Stderr, "\nScanlines remaining: %v", image_height-1-i)
-		for j := range image_width {
+	// Calculate location of upper left pixel
+	viewportUpperLeft := cameraCenter.
+		Sub(vec3.Vec3{X: 0, Y: 0, Z: focalLength}).
+		Sub(viewportU.Div(2)).
+		Sub(viewportV.Div(2))
 
-			r := float64(i) / float64(image_width-1)
-			g := float64(j) / float64(image_height-1)
-			b := 0.0
-			pc := color.Color{X: r, Y: g, Z: b}
+	pixel00Loc := viewportUpperLeft.Add(
+		pixelDeltaU.Add(pixelDeltaV).Scale(0.5),
+	)
+
+	fmt.Printf("P3\n%v %v \n255\n", imageWidth, imageHeight)
+
+	for i := range imageHeight {
+		fmt.Fprintf(os.Stderr, "\nScanlines remaining: %v", imageHeight-1-i)
+		for j := range imageWidth {
+			pixelCenter := pixel00Loc.
+				Add(pixelDeltaU.Scale(float64(i))).
+				Add(pixelDeltaV.Scale(float64(j)))
+			rayDirection := pixelCenter.Sub(cameraCenter)
+			r := ray.NewRay(cameraCenter, rayDirection)
+			pc := rayColor(r)
 			color.WriteColor(os.Stdout, pc)
 		}
 	}

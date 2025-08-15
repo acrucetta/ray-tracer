@@ -1,3 +1,6 @@
+// Package vec3 provides a minimal 3D vector type with
+// idiomatic, value-receiver methods suitable for ray tracing
+// and graphics math.
 package vec3
 
 import (
@@ -5,110 +8,87 @@ import (
 	"math"
 )
 
+// Vec3 is a 3D vector.
+//
+// All methods use value receivers and return new values.
+// For hot paths, this is usually fine with Go's escape analysis;
+// switch to pointer receivers only if profiling shows a need.
 type Vec3 struct {
 	X, Y, Z float64
 }
 
+// Point3 is an alias for a 3D point (semantic clarity in APIs).
 type Point3 = Vec3
 
-func New(x, y, z float64) Vec3 {
-	return Vec3{X: x, Y: y, Z: z}
-}
+// V constructs a new Vec3.
+func V(x, y, z float64) Vec3 { return Vec3{X: x, Y: y, Z: z} }
 
-func (v Vec3) Neg() Vec3 {
-	return Vec3{-v.X, -v.Y, -v.Z}
-}
-
-// Add returns the sum of two vectors.
+// Add returns v + u.
 func (v Vec3) Add(u Vec3) Vec3 {
 	return Vec3{v.X + u.X, v.Y + u.Y, v.Z + u.Z}
 }
 
-// AddAssign adds u to v in place.
-func (v *Vec3) AddAssign(u Vec3) {
-	v.X += u.X
-	v.Y += u.Y
-	v.Z += u.Z
+// Sub returns v - u.
+func (v Vec3) Sub(u Vec3) Vec3 {
+	return Vec3{v.X - u.X, v.Y - u.Y, v.Z - u.Z}
 }
 
-// Scale returns the vector scaled by t.
+// Mul returns the element-wise (Hadamard) product v ⊙ u.
+func (v Vec3) Mul(u Vec3) Vec3 {
+	return Vec3{v.X * u.X, v.Y * u.Y, v.Z * u.Z}
+}
+
+// Scale returns v scaled by scalar t.
 func (v Vec3) Scale(t float64) Vec3 {
 	return Vec3{v.X * t, v.Y * t, v.Z * t}
 }
 
-// ScaleAssign multiplies the vector by t in place.
-func (v *Vec3) ScaleAssign(t float64) {
-	v.X *= t
-	v.Y *= t
-	v.Z *= t
-}
-
-// Div returns the vector divided by t.
+// Div returns v divided by scalar t.
+// (Caller is responsible for ensuring t != 0.)
 func (v Vec3) Div(t float64) Vec3 {
-	return v.Scale(1 / t)
+	inv := 1.0 / t
+	return Vec3{v.X * inv, v.Y * inv, v.Z * inv}
 }
 
-// DivAssign divides the vector by t in place.
-func (v *Vec3) DivAssign(t float64) {
-	v.ScaleAssign(1 / t)
+// Neg returns -v.
+func (v Vec3) Neg() Vec3 { return Vec3{-v.X, -v.Y, -v.Z} }
+
+// Dot returns v ⋅ u.
+func (v Vec3) Dot(u Vec3) float64 {
+	return v.X*u.X + v.Y*u.Y + v.Z*u.Z
 }
 
-// Length returns the vector's length.
-func (v Vec3) Length() float64 {
-	return math.Sqrt(v.LengthSquared())
-}
-
-// LengthSquared returns the squared length of the vector.
-func (v Vec3) LengthSquared() float64 {
-	return v.X*v.X + v.Y*v.Y + v.Z*v.Z
-}
-
-// String implements the fmt.Stringer interface for printing.
-func (v Vec3) String() string {
-	return fmt.Sprintf("%g %g %g", v.X, v.Y, v.Z)
-}
-
-// Add returns the vector sum of u and v.
-func Add(u, v Vec3) Vec3 {
-	return Vec3{u.X + v.X, u.Y + v.Y, u.Z + v.Z}
-}
-
-// Sub returns the vector difference u - v.
-func Sub(u, v Vec3) Vec3 {
-	return Vec3{u.X - v.X, u.Y - v.Y, u.Z - v.Z}
-}
-
-// Mul returns the element-wise product of u and v.
-func Mul(u, v Vec3) Vec3 {
-	return Vec3{u.X * v.X, u.Y * v.Y, u.Z * v.Z}
-}
-
-// MulScalar returns the product of vector v and scalar t.
-func MulScalar(v Vec3, t float64) Vec3 {
-	return Vec3{v.X * t, v.Y * t, v.Z * t}
-}
-
-// DivScalar divides vector v by scalar t.
-func DivScalar(v Vec3, t float64) Vec3 {
-	invT := 1.0 / t
-	return MulScalar(v, invT)
-}
-
-// Dot returns the dot product of u and v.
-func Dot(u, v Vec3) float64 {
-	return u.X*v.X + u.Y*v.Y + u.Z*v.Z
-}
-
-// Cross returns the cross product of u and v.
-func Cross(u, v Vec3) Vec3 {
+// Cross returns v × u.
+func (v Vec3) Cross(u Vec3) Vec3 {
 	return Vec3{
-		u.Y*v.Z - u.Z*v.Y,
-		u.Z*v.X - u.X*v.Z,
-		u.X*v.Y - u.Y*v.X,
+		v.Y*u.Z - v.Z*u.Y,
+		v.Z*u.X - v.X*u.Z,
+		v.X*u.Y - v.Y*u.X,
 	}
 }
 
-// Unit returns a unit vector in the direction of v.
-func Unit(v Vec3) Vec3 {
-	return DivScalar(v, v.Length())
+// Len2 returns |v|^2 (squared length).
+func (v Vec3) Len2() float64 { return v.X*v.X + v.Y*v.Y + v.Z*v.Z }
+
+// Len returns |v|.
+func (v Vec3) Len() float64 { return math.Sqrt(v.Len2()) }
+
+// Normalize returns v scaled to unit length.
+// If v is near zero, it returns v unchanged to avoid NaNs.
+func (v Vec3) Normalize() Vec3 {
+	l := v.Len()
+	if l == 0 {
+		return v
+	}
+	return v.Div(l)
 }
+
+// NearZero reports whether all components are ~0.
+// Useful to avoid artifacts when reflecting/refracting.
+func (v Vec3) NearZero() bool {
+	const eps = 1e-12
+	return math.Abs(v.X) < eps && math.Abs(v.Y) < eps && math.Abs(v.Z) < eps
+}
+
+// String implements fmt.Stringer.
+func (v Vec3) String() string { return fmt.Sprintf("%g %g %g", v.X, v.Y, v.Z) }
